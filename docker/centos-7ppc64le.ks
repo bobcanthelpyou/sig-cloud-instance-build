@@ -30,7 +30,7 @@ repo --name="Updates" --baseurl=http://mirror.centos.org/altarch/7/updates/ppc64
 # Disk setup
 zerombr
 clearpart --all --initlabel
-part / --fstype ext4 --size=3000
+part / --size 3000 --fstype ext4
 part prepboot --fstype "PPC PReP Boot" --size=10
 
 # Package setup
@@ -59,8 +59,17 @@ tar
 passwd
 yum-utils
 yum-plugin-ovl
+-libss
+-qemu-guest-agent
 
+%end
 
+%pre
+# Pre configure tasks for Docker
+
+# Don't add the anaconda build logs to the image
+# see /usr/share/anaconda/post-scripts/99-copy-logs.ks
+touch /tmp/NOSAVE_LOGS
 %end
 
 %post --log=/anaconda-post.log
@@ -76,7 +85,9 @@ yum -y remove bind-libs bind-libs-lite dhclient dhcp-common dhcp-libs \
   grubby initscripts iproute iptables kexec-tools libcroco libgomp \
   libmnl libnetfilter_conntrack libnfnetlink libselinux-python lzo \
   libunistring os-prober python-decorator python-slip python-slip-dbus \
-  snappy sysvinit-tools which linux-firmware GeoIP firewalld-filesystem
+  snappy sysvinit-tools which linux-firmware GeoIP firewalld-filesystem \
+  mokutil pciutils-libs xfsprogs dosfstools efibootmgr efivar-libs \
+  qemu-guest-agent grub2-efi centos-logos shim
 
 yum clean all
 
@@ -87,15 +98,23 @@ rm -rf /etc/firewalld
 # Lock roots account, keep roots account password-less.
 passwd -l root
 
+#LANG="en_US"
+#echo "%_install_lang $LANG" > /etc/rpm/macros.image-language-conf
+
 awk '(NF==0&&!done){print "override_install_langs=en_US.utf8\ntsflags=nodocs";done=1}{print}' \
     < /etc/yum.conf > /etc/yum.conf.new
 mv /etc/yum.conf.new /etc/yum.conf
 echo 'container' > /etc/yum/vars/infra
 
+
+##Setup locale properly
+# Commenting out, as this seems to no longer be needed
+#rm -f /usr/lib/locale/locale-archive
+#localedef -v -c -i en_US -f UTF-8 en_US.UTF-8
+
 ## Remove some things we don't need
 rm -rf /var/cache/yum/*
-rm -rf /var/log/*
-rm -rf /tmp/*
+rm -f /tmp/ks-script*
 rm -rf /etc/sysconfig/network-scripts/ifcfg-*
 # do we really need a hardware database in a container?
 rm -rf /etc/udev/hwdb.bin
@@ -109,6 +128,7 @@ umount /run
 systemd-tmpfiles --create --boot
 # Make sure login works
 rm /var/run/nologin
+
 
 #Generate installtime file record
 /bin/date +%Y%m%d_%H%M > /etc/BUILDTIME

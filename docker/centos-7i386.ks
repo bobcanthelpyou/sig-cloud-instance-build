@@ -58,8 +58,17 @@ tar
 passwd
 yum-utils
 yum-plugin-ovl
+-libss
+-qemu-guest-agent
 
+%end
 
+%pre
+# Pre configure tasks for Docker
+
+# Don't add the anaconda build logs to the image
+# see /usr/share/anaconda/post-scripts/99-copy-logs.ks
+touch /tmp/NOSAVE_LOGS
 %end
 
 %post --log=/anaconda-post.log
@@ -75,7 +84,9 @@ yum -y remove bind-libs bind-libs-lite dhclient dhcp-common dhcp-libs \
   grubby initscripts iproute iptables kexec-tools libcroco libgomp \
   libmnl libnetfilter_conntrack libnfnetlink libselinux-python lzo \
   libunistring os-prober python-decorator python-slip python-slip-dbus \
-  snappy sysvinit-tools which linux-firmware GeoIP firewalld-filesystem
+  snappy sysvinit-tools which linux-firmware GeoIP firewalld-filesystem \
+  mokutil pciutils-libs xfsprogs dosfstools efibootmgr efivar-libs \
+  qemu-guest-agent grub2-efi centos-logos shim
 
 yum clean all
 
@@ -102,10 +113,8 @@ echo -e 'i386\n' > /etc/yum/vars/basesearch
 #localedef -v -c -i en_US -f UTF-8 en_US.UTF-8
 
 ## Remove some things we don't need
-rm -rf /var/cache/yum/x86_64
+rm -rf /var/cache/yum/*
 rm -f /tmp/ks-script*
-rm -rf /var/log/anaconda
-rm -rf /tmp/ks-script*
 rm -rf /etc/sysconfig/network-scripts/ifcfg-*
 # do we really need a hardware database in a container?
 rm -rf /etc/udev/hwdb.bin

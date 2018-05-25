@@ -12,7 +12,7 @@
 # Basic setup information
 url --url="http://mirror.centos.org/altarch/7/os/armhfp/"
 install
-keyboard us --xlayouts=us --vckeymap=us
+keyboard us
 rootpw --lock --iscrypted locked
 timezone --isUtc --nontp UTC
 selinux --enforcing
@@ -20,18 +20,17 @@ firewall --disabled
 network --bootproto=dhcp --device=link --activate --onboot=on
 shutdown
 bootloader --disable
-lang en_US.UTF-8
+lang en_US
 
 # Repositories to use
 repo --name="CentOS" --baseurl=http://mirror.centos.org/altarch/7/os/armhfp/ --cost=100
 ## Uncomment for rolling builds
 repo --name="Updates" --baseurl=http://mirror.centos.org/altarch/7/updates/armhfp/ --cost=100
 
-
 # Disk setup
 zerombr
-clearpart --initlabel --all
-part /         --size=3000 --label=rootfs
+clearpart --all --initlabel
+part / --size 3000 --fstype ext4
 
 # Package setup
 %packages --excludedocs --instLangs=en --nocore
@@ -43,8 +42,10 @@ centos-userland-release
 less
 -kernel*
 -*firmware
+-firewalld-filesystem
 -os-prober
 -gettext*
+-GeoIP
 -bind-license
 -freetype
 iputils
@@ -57,12 +58,17 @@ tar
 passwd
 yum-utils
 yum-plugin-ovl
--GeoIP
--firewalld-filesystem
 -libss
 -qemu-guest-agent
 
+%end
 
+%pre
+# Pre configure tasks for Docker
+
+# Don't add the anaconda build logs to the image
+# see /usr/share/anaconda/post-scripts/99-copy-logs.ks
+touch /tmp/NOSAVE_LOGS
 %end
 
 %post --log=/anaconda-post.log
@@ -74,13 +80,14 @@ rpm -e kernel
 
 yum -y remove bind-libs bind-libs-lite dhclient dhcp-common dhcp-libs \
   dracut-network e2fsprogs e2fsprogs-libs ebtables ethtool file \
-  firewalld freetype gettext gettext-libs groff-base grub2-efi grub2-tools \
+  firewalld freetype gettext gettext-libs groff-base grub2 grub2-tools \
   grubby initscripts iproute iptables kexec-tools libcroco libgomp \
   libmnl libnetfilter_conntrack libnfnetlink libselinux-python lzo \
   libunistring os-prober python-decorator python-slip python-slip-dbus \
-  snappy sysvinit-tools which linux-firmware centos-logos shim \
+  snappy sysvinit-tools which linux-firmware GeoIP firewalld-filesystem \
   mokutil pciutils-libs xfsprogs dosfstools efibootmgr efivar-libs \
-  GeoIP firewalld-filesystem
+  qemu-guest-agent grub2-efi centos-logos shim
+
 yum clean all
 
 #clean up unused directories
@@ -93,25 +100,25 @@ passwd -l root
 #LANG="en_US"
 #echo "%_install_lang $LANG" > /etc/rpm/macros.image-language-conf
 
-awk '(NF==0&&!done){print "override_install_langs='$LANG'\ntsflags=nodocs";done=1}{print}' \
+awk '(NF==0&&!done){print "override_install_langs=en_US.utf8\ntsflags=nodocs";done=1}{print}' \
     < /etc/yum.conf > /etc/yum.conf.new
 mv /etc/yum.conf.new /etc/yum.conf
 echo 'container' > /etc/yum/vars/infra
 echo 'generic' > /etc/yum/vars/kvariant
 
 
-#Setup locale properly
+##Setup locale properly
+# Commenting out, as this seems to no longer be needed
+#rm -f /usr/lib/locale/locale-archive
 #localedef -v -c -i en_US -f UTF-8 en_US.UTF-8
 
-rm -rf /var/cache/yum/aarch64
+## Remove some things we don't need
+rm -rf /var/cache/yum/*
 rm -f /tmp/ks-script*
-rm -rf /var/log/anaconda*
-rm -rf /tmp/ks-script*
 rm -rf /etc/sysconfig/network-scripts/ifcfg-*
 # do we really need a hardware database in a container?
 rm -rf /etc/udev/hwdb.bin
 rm -rf /usr/lib/udev/hwdb.d/*
-
 
 ## Systemd fixes
 # no machine-id by default.
@@ -125,5 +132,6 @@ rm /var/run/nologin
 
 #Generate installtime file record
 /bin/date +%Y%m%d_%H%M > /etc/BUILDTIME
+
 
 %end
